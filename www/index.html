@@ -88,7 +88,26 @@
 
   <script src="capacitor.js"></script>
   <script>
-    const { SpeechRecognition, TextToSpeech, LocalNotifications, Alarm } = Capacitor.Plugins;
+    const { SpeechRecognition, TextToSpeech, LocalNotifications, Alarm, AppLauncher } = Capacitor.Plugins;
+
+    // Common app name -> Android package name. Add more as needed.
+    const APP_PACKAGES = {
+      youtube: 'com.google.android.youtube',
+      whatsapp: 'com.whatsapp',
+      instagram: 'com.instagram.android',
+      facebook: 'com.facebook.katana',
+      spotify: 'com.spotify.music',
+      gmail: 'com.google.android.gm',
+      chrome: 'com.android.chrome',
+      maps: 'com.google.android.apps.maps',
+      'google maps': 'com.google.android.apps.maps',
+      camera: 'com.android.camera',
+      settings: 'com.android.settings',
+      calculator: 'com.google.android.calculator',
+      messages: 'com.google.android.apps.messaging',
+      playstore: 'com.android.vending',
+      'play store': 'com.android.vending'
+    };
 
     const micBtn = document.getElementById('mic-btn');
     const heard = document.getElementById('heard');
@@ -183,6 +202,12 @@
         return { type: 'time' };
       }
 
+      // "open youtube" / "open whatsapp"
+      let openMatch = lower.match(/^open (?:the )?(.+)/);
+      if (openMatch) {
+        return { type: 'open_app', appName: openMatch[1].trim() };
+      }
+
       // "set a timer for 10 minutes" / "set a timer for 30 seconds"
       let m = lower.match(/set (?:a |an )?timer for (\d+)\s*(second|seconds|sec|minute|minutes|min)?/);
       if (m) {
@@ -217,6 +242,25 @@
         const now = new Date();
         const timeLabel = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
         await speak(`It's ${timeLabel}.`);
+        return;
+      }
+
+      if (cmd.type === 'open_app') {
+        const pkg = APP_PACKAGES[cmd.appName];
+        if (!pkg) {
+          await speak(`I don't know how to open ${cmd.appName} yet.`);
+          return;
+        }
+        try {
+          const result = await AppLauncher.openUrl({ url: pkg });
+          if (result.completed) {
+            await speak(`Opening ${cmd.appName}.`);
+          } else {
+            await speak(`${cmd.appName} doesn't seem to be installed.`);
+          }
+        } catch (err) {
+          await speak(`I couldn't open ${cmd.appName}.`);
+        }
         return;
       }
 
