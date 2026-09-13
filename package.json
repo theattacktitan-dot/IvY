@@ -1,10 +1,11 @@
 {
   "name": "ivy",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": true,
   "dependencies": {
     "@capacitor/core": "^8.0.0",
     "@capacitor/android": "^8.0.0",
+    "@capacitor/local-notifications": "^8.0.0",
     "@capacitor-community/speech-recognition": "^7.0.0",
     "@capacitor-community/text-to-speech": "^8.0.0"
   },
