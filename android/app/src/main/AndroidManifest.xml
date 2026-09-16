@@ -12,8 +12,6 @@
         <package android:name="com.google.android.apps.maps" />
         <package android:name="com.android.vending" />
     </queries>
-
-</parameter>
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
