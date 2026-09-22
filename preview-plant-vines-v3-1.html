@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ivy — Living Vines v3</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; background:#010402; overflow:hidden; font-family:-apple-system,Roboto,sans-serif; }
+  body { display:flex; flex-direction:column; position:relative; }
+  #float-layer { position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+  .float-letter { position:absolute; font-family:Georgia,'Iowan Old Style','Palatino Linotype',serif; color:#3d8f66; opacity:0.07; user-select:none; font-size:13rem; line-height:1; transition: top 6s ease-in-out, left 6s ease-in-out, transform 6s ease-in-out; }
+  #vine-ambient, #vine-burst { position:absolute; inset:0; z-index:1; overflow:hidden; pointer-events:none; }
+  .leaf-bud, .thorn-tip { opacity: 0; transition: opacity 0.5s ease-in; }
+  .tip-glow { opacity: 0; transition: opacity 1s ease; }
+  .tip-glow.active { animation: glow-pulse 2.4s ease-in-out infinite; }
+  @keyframes glow-pulse {
+    0%, 100% { opacity: 0.18; }
+    50%      { opacity: 0.55; }
+  }
+  header { position:relative; z-index:2; padding:18px 20px 14px; text-align:center; font-size:1rem; font-weight:600; color:#e8f2ec; border-bottom:1px solid #0c1712; }
+  #chat { position:relative; z-index:2; flex:1; overflow-y:auto; padding:20px 16px; display:flex; flex-direction:column; gap:18px; }
+  .msg-row { display:flex; gap:10px; align-items:flex-start; max-width:88%; }
+  .msg-row.user { align-self:flex-end; flex-direction:row-reverse; }
+  .avatar { flex:none; width:26px; height:26px; border-radius:50%; margin-top:2px; background:linear-gradient(135deg,#2f9e6a,#7fd9a4); box-shadow:0 0 16px 2px rgba(63,174,116,0.5); }
+  .bubble { font-size:0.98rem; line-height:1.45; padding:10px 14px; border-radius:16px; }
+  .msg-row.ivy .bubble { background:transparent; padding:4px 0; color:#e8f2ec; }
+  .msg-row.user .bubble { background:#0a1510; color:#e8f2ec; border-bottom-right-radius:4px; }
+  footer { position:relative; z-index:2; padding:12px 14px 20px; }
+  #input-bar { position:relative; display:flex; align-items:center; gap:12px; background:#0a1510cc; border-radius:999px; padding:8px 8px 8px 20px; backdrop-filter: blur(4px); }
+  #status-text { flex:1; font-size:0.9rem; color:#6a8c7c; }
+  #mic-btn { flex:none; width:48px; height:48px; border-radius:50%; border:none; background:linear-gradient(135deg,#2f9e6a,#7fd9a4); display:flex; align-items:center; justify-content:center; box-shadow:0 0 22px 4px rgba(63,174,116,0.55); position:relative; z-index:1; }
+  #mic-btn svg { width:20px; height:20px; fill:none; stroke:white; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  #hint-btn { position:absolute; top:14px; right:14px; z-index:3; background:#0a1510; color:#7fd9a4; border:1px solid #16281f; border-radius:999px; font-size:0.75rem; padding:6px 12px; }
+</style>
+</head>
+<body>
+  <div id="float-layer"></div>
+  <svg id="vine-ambient" width="100%" height="100%">
+    <defs>
+      <linearGradient id="vineGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+        <stop offset="0%" stop-color="#1f5c3e"/>
+        <stop offset="60%" stop-color="#4caf7d"/>
+        <stop offset="100%" stop-color="#c8f7dd"/>
+      </linearGradient>
+      <radialGradient id="tipGlowGrad">
+        <stop offset="0%" stop-color="#d8fbe6" stop-opacity="0.9"/>
+        <stop offset="60%" stop-color="#7fd9a4" stop-opacity="0.4"/>
+        <stop offset="100%" stop-color="#7fd9a4" stop-opacity="0"/>
+      </radialGradient>
+      <filter id="vineGlow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="2.2" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+  </svg>
+  <svg id="vine-burst" width="100%" height="100%"></svg>
+  <button id="hint-btn">Tap mic to test</button>
+  <header>IvY</header>
+  <div id="chat">
+    <div class="msg-row ivy"><div class="avatar"></div><div class="bubble">Good evening. You have one reminder set for 7pm.</div></div>
+    <div class="msg-row user"><div class="bubble">Set a timer for 10 minutes</div></div>
+    <div class="msg-row ivy"><div class="avatar"></div><div class="bubble">Timer set for 10 minutes. It will ring in your clock app.</div></div>
+  </div>
+  <footer>
+    <div id="input-bar">
+      <span id="status-text">Tap to speak</span>
+      <button id="mic-btn"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0"/><line x1="12" y1="18" x2="12" y2="22"/></svg></button>
+    </div>
+  </footer>
+
+  <script>
+    const NS = "http://www.w3.org/2000/svg";
+    const LEAF_D = "M0 0 C -5 -3, -8 -9, 0 -14 C 8 -9, 5 -3, 0 0 Z";
+    const H = window.innerHeight, W = window.innerWidth;
+
+    const floatLayer = document.getElementById('float-layer');
+    ['I','v','Y'].forEach((letter,i)=>{
+      const el=document.createElement('div'); el.className='float-letter'; el.textContent=letter;
+      function spot(){return {top:(10+Math.random()*70)+'%',left:(5+Math.random()*80)+'%',rot:(Math.random()*40-20).toFixed(1)+'deg'};}
+      const s=spot(); el.style.top=s.top; el.style.left=s.left; el.style.transform=`rotate(${s.rot})`;
+      floatLayer.appendChild(el);
+      function wander(){const s=spot(); const d=5+Math.random()*6; el.style.transitionDuration=d+'s'; el.style.top=s.top; el.style.left=s.left; el.style.transform=`rotate(${s.rot})`; setTimeout(wander,d*1000);}
+      setTimeout(wander, 400*i+Math.random()*1000);
+    });
+
+    function addLeaf(svg, x, y, angleDeg, scale) {
+      const g = document.createElementNS(NS, 'g');
+      g.setAttribute('class', 'leaf-bud');
+      g.setAttribute('transform', `translate(${x},${y}) rotate(${angleDeg}) scale(${scale})`);
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', LEAF_D);
+      path.setAttribute('fill', 'url(#vineGrad)');
+      g.appendChild(path);
+      svg.appendChild(g);
+      return g;
+    }
+
+    // Sharp triangular thorn tip, oriented along the path's tangent direction
+    function addThornTip(svg, path, L) {
+      const tip = path.getPointAtLength(L);
+      const back = path.getPointAtLength(Math.max(0, L-5));
+      const dx = tip.x-back.x, dy = tip.y-back.y;
+      const dist = Math.hypot(dx,dy) || 1;
+      const ux = dx/dist, uy = dy/dist;
+      const px = -uy, py = ux;
+      const length = 13, width = 5;
+      const apex = { x: tip.x+ux*length, y: tip.y+uy*length };
+      const baseL = { x: tip.x+px*width/2, y: tip.y+py*width/2 };
+      const baseR = { x: tip.x-px*width/2, y: tip.y-py*width/2 };
+      const poly = document.createElementNS(NS, 'polygon');
+      poly.setAttribute('class', 'thorn-tip');
+      poly.setAttribute('points', `${apex.x},${apex.y} ${baseL.x},${baseL.y} ${baseR.x},${baseR.y}`);
+      poly.setAttribute('fill', 'url(#vineGrad)');
+      poly.setAttribute('filter', 'url(#vineGlow)');
+      svg.appendChild(poly);
+      return { el: poly, apex };
+    }
+
+    function addTipGlow(svg, x, y, radius) {
+      const circle = document.createElementNS(NS, 'circle');
+      circle.setAttribute('class', 'tip-glow');
+      circle.setAttribute('cx', x); circle.setAttribute('cy', y); circle.setAttribute('r', radius);
+      circle.setAttribute('fill', 'url(#tipGlowGrad)');
+      svg.appendChild(circle);
+      return circle;
+    }
+
+    // Vines lean toward whichever wall they're closer to, growing more horizontal as they rise
+    function buildVinePath(rootX, height, wobble) {
+      const towardRight = rootX < W/2 ? 1 : -1; // lean AWAY from center, i.e. toward nearest wall
+      const reach = towardRight * height * 0.85;
+      const c1x = rootX + reach*0.25 + wobble*8, c1y = -height*0.35;
+      const c2x = rootX + reach*0.6 - wobble*10, c2y = -height*0.72;
+      const tipX = rootX + reach, tipY = -height;
+      return `M${rootX} 0 C ${c1x} ${c1y}, ${c2x} ${c2y}, ${tipX} ${tipY}`;
+    }
+
+    const ambientSvg = document.getElementById('vine-ambient');
+
+    function growAmbientVine(rootX, maxHeight, wobble, durBase) {
+      const g = document.createElementNS(NS, 'g');
+      g.setAttribute('transform', `translate(0, ${H})`);
+      ambientSvg.appendChild(g);
+
+      const d = buildVinePath(rootX, maxHeight, wobble);
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', d);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', 'url(#vineGrad)');
+      path.setAttribute('stroke-width', 2.3);
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('filter', 'url(#vineGlow)');
+      g.appendChild(path);
+
+      const L = path.getTotalLength();
+      path.style.strokeDasharray = L;
+      path.style.strokeDashoffset = L;
+      path.style.opacity = 0.55;
+
+      [0.35, 0.68].forEach((frac, idx) => {
+        const pt = path.getPointAtLength(L * frac);
+        const pt2 = path.getPointAtLength(Math.min(L, L*frac + 5));
+        const angle = Math.atan2(pt2.y-pt.y, pt2.x-pt.x) * 180/Math.PI + (idx%2===0 ? -70 : 70);
+        addLeaf(g, pt.x, pt.y, angle, 1.05);
+      });
+
+      const thorn = addThornTip(g, path, L);
+      const glow = addTipGlow(g, thorn.apex.x, thorn.apex.y, 9 + Math.random()*3);
+
+      const dur = durBase + Math.random()*2;
+      let start = null, wasGrown = false;
+      function frame(ts) {
+        if (!start) start = ts;
+        const t = ((ts - start)/1000) % (dur*2);
+        let offset;
+        const isGrown = t >= dur*0.5 && t < dur*1.1;
+        if (t < dur*0.5) offset = L * (1 - (t/(dur*0.5)));
+        else if (t < dur*1.1) offset = 0;
+        else offset = L * Math.min(1, (t - dur*1.1)/(dur*0.9));
+        path.style.strokeDashoffset = Math.max(0, offset);
+
+        if (isGrown !== wasGrown) {
+          g.querySelectorAll('.leaf-bud, .thorn-tip').forEach(el => el.style.opacity = isGrown ? 0.6 : 0);
+          glow.classList.toggle('active', isGrown);
+          glow.style.opacity = isGrown ? '' : 0;
+          wasGrown = isGrown;
+        }
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // More vines, spread across the width, each biased toward its nearer wall
+    const vineConfigs = [
+      { x: W*0.06, h: H*0.30, w: 1,  d: 6.0 },
+      { x: W*0.20, h: H*0.20, w: -1, d: 7.4 },
+      { x: W*0.34, h: H*0.34, w: 1,  d: 5.6 },
+      { x: W*0.50, h: H*0.18, w: -1, d: 8.2 },
+      { x: W*0.64, h: H*0.28, w: 1,  d: 6.8 },
+      { x: W*0.78, h: H*0.22, w: -1, d: 7.0 },
+      { x: W*0.90, h: H*0.36, w: 1,  d: 5.2 },
+      { x: W*0.96, h: H*0.16, w: -1, d: 9.0 }
+    ];
+    vineConfigs.forEach(c => growAmbientVine(c.x, c.h, c.w, c.d));
+
+    const burstSvg = document.getElementById('vine-burst');
+    const micBtn = document.getElementById('mic-btn');
+    let burstFrame = null;
+
+    function shootVine() {
+      burstSvg.innerHTML = '';
+      cancelAnimationFrame(burstFrame);
+      const rect = micBtn.getBoundingClientRect();
+      const rootX = rect.left + rect.width/2;
+      const rootY = rect.top;
+      const height = 90 + Math.random()*40;
+
+      const g = document.createElementNS(NS, 'g');
+      g.setAttribute('transform', `translate(0, ${rootY})`);
+      burstSvg.appendChild(g);
+
+      const dir = rootX < W/2 ? 1 : -1;
+      const w = height*0.35*dir;
+      const d = `M${rootX} 0 C ${rootX+w*0.4} ${-height*0.4}, ${rootX+w*0.8} ${-height*0.75}, ${rootX+w} ${-height}`;
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', d);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', 'url(#vineGrad)');
+      path.setAttribute('stroke-width', 2.8);
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('filter', 'url(#vineGlow)');
+      g.appendChild(path);
+
+      const L = path.getTotalLength();
+      path.style.strokeDasharray = L;
+      path.style.strokeDashoffset = L;
+
+      const thorn = addThornTip(g, path, L);
+      const glow = addTipGlow(g, thorn.apex.x, thorn.apex.y, 12);
+
+      const dur = 0.7;
+      let start = null;
+      function frame(ts) {
+        if (!start) start = ts;
+        const t = (ts-start)/1000;
+        const offset = L * Math.max(0, 1 - t/dur);
+        path.style.strokeDashoffset = offset;
+        if (offset === 0) {
+          thorn.el.style.opacity = 0.7;
+          glow.classList.add('active');
+        }
+        if (t < dur*1.6) burstFrame = requestAnimationFrame(frame);
+      }
+      burstFrame = requestAnimationFrame(frame);
+    }
+
+    let isListening = false;
+    micBtn.addEventListener('click', () => {
+      isListening = !isListening;
+      micBtn.classList.toggle('listening', isListening);
+      document.getElementById('status-text').textContent = isListening ? 'Listening' : 'Tap to speak';
+      if (isListening) shootVine(); else { burstSvg.innerHTML=''; cancelAnimationFrame(burstFrame); }
+    });
+  </script>
+</body>
+</html>
