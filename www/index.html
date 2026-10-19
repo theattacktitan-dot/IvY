@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ivy — Living Vines v3</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Ivy — Living Vines v4</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { height:100%; background:#010402; overflow:hidden; font-family:-apple-system,Roboto,sans-serif; }
@@ -30,8 +30,8 @@
   #input-bar { position:relative; display:flex; align-items:center; gap:12px; background:#0a1510cc; border-radius:999px; padding:8px 8px 8px 20px; backdrop-filter: blur(4px); }
   #status-text { flex:1; font-size:0.9rem; color:#6a8c7c; }
   #mic-btn { flex:none; width:48px; height:48px; border-radius:50%; border:none; background:linear-gradient(135deg,#2f9e6a,#7fd9a4); display:flex; align-items:center; justify-content:center; box-shadow:0 0 22px 4px rgba(63,174,116,0.55); position:relative; z-index:1; }
+  #mic-btn.listening { box-shadow:0 0 30px 8px rgba(127,217,164,0.8); }
   #mic-btn svg { width:20px; height:20px; fill:none; stroke:white; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
-  #hint-btn { position:absolute; top:14px; right:14px; z-index:3; background:#0a1510; color:#7fd9a4; border:1px solid #16281f; border-radius:999px; font-size:0.75rem; padding:6px 12px; }
 </style>
 </head>
 <body>
@@ -55,12 +55,9 @@
     </defs>
   </svg>
   <svg id="vine-burst" width="100%" height="100%"></svg>
-  <button id="hint-btn">Tap mic to test</button>
   <header>IvY</header>
   <div id="chat">
-    <div class="msg-row ivy"><div class="avatar"></div><div class="bubble">Good evening. You have one reminder set for 7pm.</div></div>
-    <div class="msg-row user"><div class="bubble">Set a timer for 10 minutes</div></div>
-    <div class="msg-row ivy"><div class="avatar"></div><div class="bubble">Timer set for 10 minutes. It will ring in your clock app.</div></div>
+    <div class="msg-row ivy"><div class="avatar"></div><div class="bubble">Tap the mic and speak, Master.</div></div>
   </div>
   <footer>
     <div id="input-bar">
@@ -69,7 +66,13 @@
     </div>
   </footer>
 
+  <!-- SCRIPT 1: visuals only. If this fails, the assistant script below still runs. -->
   <script>
+    window.addEventListener('error', function (e) {
+      var s = document.getElementById('status-text');
+      if (s) s.textContent = 'Script error: ' + e.message;
+    });
+
     const NS = "http://www.w3.org/2000/svg";
     const LEAF_D = "M0 0 C -5 -3, -8 -9, 0 -14 C 8 -9, 5 -3, 0 0 Z";
     const H = window.innerHeight, W = window.innerWidth;
@@ -96,7 +99,6 @@
       return g;
     }
 
-    // Sharp triangular thorn tip, oriented along the path's tangent direction
     function addThornTip(svg, path, L) {
       const tip = path.getPointAtLength(L);
       const back = path.getPointAtLength(Math.max(0, L-5));
@@ -126,9 +128,8 @@
       return circle;
     }
 
-    // Vines lean toward whichever wall they're closer to, growing more horizontal as they rise
     function buildVinePath(rootX, height, wobble) {
-      const towardRight = rootX < W/2 ? 1 : -1; // lean AWAY from center, i.e. toward nearest wall
+      const towardRight = rootX < W/2 ? 1 : -1;
       const reach = towardRight * height * 0.85;
       const c1x = rootX + reach*0.25 + wobble*8, c1y = -height*0.35;
       const c2x = rootX + reach*0.6 - wobble*10, c2y = -height*0.72;
@@ -191,7 +192,6 @@
       requestAnimationFrame(frame);
     }
 
-    // More vines, spread across the width, each biased toward its nearer wall
     const vineConfigs = [
       { x: W*0.06, h: H*0.30, w: 1,  d: 6.0 },
       { x: W*0.20, h: H*0.20, w: -1, d: 7.4 },
@@ -208,9 +208,13 @@
     const micBtn = document.getElementById('mic-btn');
     let burstFrame = null;
 
-    function shootVine() {
+    function stopVine() {
       burstSvg.innerHTML = '';
       cancelAnimationFrame(burstFrame);
+    }
+
+    function shootVine() {
+      stopVine();
       const rect = micBtn.getBoundingClientRect();
       const rootX = rect.left + rect.width/2;
       const rootY = rect.top;
@@ -254,14 +258,343 @@
       }
       burstFrame = requestAnimationFrame(frame);
     }
+  </script>
 
-    let isListening = false;
-    micBtn.addEventListener('click', () => {
-      isListening = !isListening;
-      micBtn.classList.toggle('listening', isListening);
-      document.getElementById('status-text').textContent = isListening ? 'Listening' : 'Tap to speak';
-      if (isListening) shootVine(); else { burstSvg.innerHTML=''; cancelAnimationFrame(burstFrame); }
-    });
+  <!-- SCRIPT 2: Ivy's brain (restored from the working version) -->
+  <script src="capacitor.js"></script>
+  <script>
+    const { SpeechRecognition, TextToSpeech, LocalNotifications, Alarm, AppLauncher } = Capacitor.Plugins;
+
+    const APP_PACKAGES = {
+      youtube: 'com.google.android.youtube',
+      whatsapp: 'com.whatsapp',
+      instagram: 'com.instagram.android',
+      facebook: 'com.facebook.katana',
+      spotify: 'com.spotify.music',
+      gmail: 'com.google.android.gm',
+      chrome: 'com.android.chrome',
+      maps: 'com.google.android.apps.maps',
+      'google maps': 'com.google.android.apps.maps',
+      camera: 'com.android.camera',
+      settings: 'com.android.settings',
+      calculator: 'com.google.android.calculator',
+      messages: 'com.google.android.apps.messaging',
+      playstore: 'com.android.vending',
+      'play store': 'com.android.vending'
+    };
+
+    const chatEl = document.getElementById('chat');
+    const statusEl = document.getElementById('status-text');
+    const micButton = document.getElementById('mic-btn');
+
+    // Recorded Piper clips. The files sit next to index.html in the www folder.
+    const VOICE = {
+      alarm_set: 'alarm_set.mp3',
+      app_opened: 'app_opened.mp3',
+      greeting: 'greeting.mp3',
+      done: 'done.mp3',
+      listening: 'listening.mp3',
+      error: 'error.mp3'
+    };
+    const VOICE_TEXT = {
+      alarm_set: 'On it... And set, Master.',
+      app_opened: 'Anything else, Master?',
+      error: "I'm sorry, that did not work. Shall I try again, Master?"
+    };
+
+    const REMINDER_CHANNEL_ID = 'ivy_reminders';
+    let notifCounter = 1000;
+    let channelReady = false;
+    let listening = false;
+
+    function addBubble(role, text) {
+      const row = document.createElement('div');
+      row.className = 'msg-row ' + role;
+      if (role === 'ivy') {
+        const av = document.createElement('div');
+        av.className = 'avatar';
+        row.appendChild(av);
+      }
+      const b = document.createElement('div');
+      b.className = 'bubble';
+      b.textContent = text;
+      row.appendChild(b);
+      chatEl.appendChild(row);
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+
+    async function ensureReminderChannel() {
+      if (channelReady) return;
+      try {
+        await LocalNotifications.createChannel({
+          id: REMINDER_CHANNEL_ID,
+          name: 'Ivy Reminders',
+          description: 'Reminders scheduled by Ivy',
+          importance: 5,
+          sound: undefined,
+          vibration: true
+        });
+        channelReady = true;
+      } catch (err) {
+        channelReady = true;
+      }
+    }
+
+    // Live replies use the phone's built-in voice.
+    async function speak(text) {
+      addBubble('ivy', text);
+      statusEl.textContent = 'Speaking';
+      try {
+        await TextToSpeech.speak({ text: text, lang: 'en-US', rate: 1.0, pitch: 1.0, volume: 1.0 });
+      } catch (err) {
+        statusEl.textContent = 'TTS error: ' + err.message;
+        return;
+      }
+      statusEl.textContent = 'Tap to speak';
+    }
+
+    function playClip(key) {
+      return new Promise(function (resolve) {
+        try {
+          const a = new Audio(VOICE[key]);
+          a.onended = function () { resolve(true); };
+          a.onerror = function () { resolve(false); };
+          const p = a.play();
+          if (p && p.catch) p.catch(function () { resolve(false); });
+        } catch (e) {
+          resolve(false);
+        }
+      });
+    }
+
+    // Plays a recorded Piper clip. The bubble shows the clip's words plus any detail.
+    // If the clip cannot play, the phone's built-in voice says the same words instead.
+    async function sayClip(key, detail) {
+      const phrase = VOICE_TEXT[key];
+      addBubble('ivy', detail ? phrase + ' ' + detail : phrase);
+      statusEl.textContent = 'Speaking';
+      const ok = await playClip(key);
+      if (!ok) {
+        try {
+          await TextToSpeech.speak({ text: phrase, lang: 'en-US', rate: 1.0, pitch: 1.0, volume: 1.0 });
+        } catch (err) {
+          statusEl.textContent = 'TTS error: ' + err.message;
+          return;
+        }
+      }
+      statusEl.textContent = 'Tap to speak';
+    }
+
+    function parseTime(str) {
+      const match = str.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+      if (!match) return null;
+      let hour = parseInt(match[1], 10);
+      const minute = match[2] ? parseInt(match[2], 10) : 0;
+      const period = match[3] ? match[3].toLowerCase() : null;
+
+      if (period === 'pm' && hour < 12) hour += 12;
+      if (period === 'am' && hour === 12) hour = 0;
+
+      if (hour > 23 || minute > 59) return null;
+      return { hour: hour, minute: minute };
+    }
+
+    function nextOccurrence(hour, minute, forceTomorrow) {
+      const now = new Date();
+      const target = new Date();
+      target.setHours(hour, minute, 0, 0);
+      if (forceTomorrow || target <= now) {
+        target.setDate(target.getDate() + 1);
+      }
+      return target;
+    }
+
+    async function scheduleReminderNotification(title, body, fireDate) {
+      await ensureReminderChannel();
+      const perm = await LocalNotifications.checkPermissions();
+      if (perm.display !== 'granted') {
+        const req = await LocalNotifications.requestPermissions();
+        if (req.display !== 'granted') {
+          await speak('I need notification permission to set that, Master.');
+          return false;
+        }
+      }
+      notifCounter++;
+      await LocalNotifications.schedule({
+        notifications: [{
+          id: notifCounter,
+          title: title,
+          body: body,
+          channelId: REMINDER_CHANNEL_ID,
+          schedule: { at: fireDate }
+        }]
+      });
+      return true;
+    }
+
+    function parseCommand(text) {
+      const lower = text.toLowerCase().trim();
+
+      if (/what(?:'s| is) the time|what time is it|current time/.test(lower)) {
+        return { type: 'time' };
+      }
+
+      let openMatch = lower.match(/^open (?:the )?(.+)/);
+      if (openMatch) {
+        return { type: 'open_app', appName: openMatch[1].trim() };
+      }
+
+      let m = lower.match(/set (?:a |an )?timer for (\d+)\s*(second|seconds|sec|minute|minutes|min)?/);
+      if (m) {
+        const amount = parseInt(m[1], 10);
+        const unit = (m[2] || 'minute').startsWith('sec') ? 'seconds' : 'minutes';
+        return { type: 'timer', amount: amount, unit: unit };
+      }
+
+      m = lower.match(/set (?:an |a )?alarm for (.+)/);
+      if (m) {
+        const time = parseTime(m[1]);
+        if (time) return { type: 'alarm', time: time };
+      }
+
+      m = lower.match(/remind me (tomorrow |today )?(?:at )?(.+?) to (.+)/);
+      if (m) {
+        const dayWord = m[1] ? m[1].trim() : null;
+        const time = parseTime(m[2]);
+        const task = m[3];
+        if (time) {
+          return { type: 'reminder', time: time, task: task, forceTomorrow: dayWord === 'tomorrow' };
+        }
+      }
+
+      return null;
+    }
+
+    async function runCommand(cmd, rawText) {
+      if (cmd.type === 'time') {
+        const now = new Date();
+        const timeLabel = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        await speak("It's " + timeLabel + ', Master.');
+        return;
+      }
+
+      if (cmd.type === 'open_app') {
+        const pkg = APP_PACKAGES[cmd.appName];
+        if (!pkg) {
+          await speak("I don't know how to open " + cmd.appName + ' yet, Master.');
+          return;
+        }
+        try {
+          const result = await AppLauncher.openUrl({ url: pkg });
+          if (result.completed) {
+            await sayClip('app_opened', 'Opened ' + cmd.appName + '.');
+          } else {
+            await speak(cmd.appName + " doesn't seem to be installed, Master.");
+          }
+        } catch (err) {
+          await sayClip('error', "I couldn't open " + cmd.appName + '.');
+        }
+        return;
+      }
+
+      if (cmd.type === 'timer') {
+        const seconds = cmd.unit === 'seconds' ? cmd.amount : cmd.amount * 60;
+        const label = cmd.amount + ' ' + cmd.unit;
+        try {
+          await Alarm.createTimer({
+            duration: seconds,
+            label: 'Ivy Timer',
+            android: { skipUi: true }
+          });
+          await sayClip('alarm_set', 'Timer set for ' + label + '. It will ring in your clock app.');
+        } catch (err) {
+          await sayClip('error', 'Timer problem: ' + err.message);
+        }
+        return;
+      }
+
+      if (cmd.type === 'alarm') {
+        const timeLabel12 = new Date(0, 0, 0, cmd.time.hour, cmd.time.minute)
+          .toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        try {
+          await Alarm.createAlarm({
+            hour: cmd.time.hour,
+            minute: cmd.time.minute,
+            label: 'Ivy Alarm',
+            android: { skipUi: true }
+          });
+          await sayClip('alarm_set', 'Alarm set for ' + timeLabel12 + '. It will ring like a normal alarm.');
+        } catch (err) {
+          await sayClip('error', 'Alarm problem: ' + err.message);
+        }
+        return;
+      }
+
+      if (cmd.type === 'reminder') {
+        const fireDate = nextOccurrence(cmd.time.hour, cmd.time.minute, cmd.forceTomorrow);
+        const timeLabel = fireDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const ok = await scheduleReminderNotification('Reminder at ' + timeLabel, cmd.task, fireDate);
+        if (ok) await sayClip('alarm_set', "I'll remind you to " + cmd.task + ' at ' + timeLabel + '.');
+        return;
+      }
+
+      await speak('You said: ' + rawText + ', Master.');
+    }
+
+    async function listen() {
+      if (listening) {
+        try { await SpeechRecognition.stop(); } catch (e) {}
+        return;
+      }
+      listening = true;
+      try {
+        const perm = await SpeechRecognition.checkPermissions();
+        if (perm.speechRecognition !== 'granted') {
+          const req = await SpeechRecognition.requestPermissions();
+          if (req.speechRecognition !== 'granted') {
+            statusEl.textContent = 'Microphone permission denied';
+            return;
+          }
+        }
+
+        micButton.classList.add('listening');
+        statusEl.textContent = 'Listening';
+        shootVine();
+
+        const result = await SpeechRecognition.start({
+          language: 'en-US',
+          maxResults: 1,
+          partialResults: false,
+          popup: false
+        });
+
+        listening = false;
+        micButton.classList.remove('listening');
+        stopVine();
+
+        const text = (result && result.matches && result.matches[0]) || '';
+        if (!text) {
+          statusEl.textContent = 'Nothing heard. Tap to speak';
+          return;
+        }
+
+        addBubble('user', text);
+        const cmd = parseCommand(text);
+        if (cmd) {
+          await runCommand(cmd, text);
+        } else {
+          await speak('You said: ' + text + ', Master.');
+        }
+      } catch (err) {
+        statusEl.textContent = 'Error: ' + err.message;
+      } finally {
+        listening = false;
+        micButton.classList.remove('listening');
+        stopVine();
+      }
+    }
+
+    micButton.addEventListener('click', listen);
   </script>
 </body>
 </html>
